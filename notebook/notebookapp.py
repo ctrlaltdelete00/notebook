@@ -213,7 +213,7 @@ class NotebookWebApplication(web.Application):
         now = utcnow()
         
         root_dir = contents_manager.root_dir
-        home = os.path.expanduser('~')
+        home = py3compat.str_to_unicode(os.path.expanduser('~'), encoding=sys.getfilesystemencoding()) 
         if root_dir.startswith(home + os.path.sep):
             # collapse $HOME to ~
             root_dir = '~' + root_dir[len(home):]
@@ -865,6 +865,12 @@ class NotebookApp(JupyterApp):
     @default('allow_remote_access')
     def _default_allow_remote(self):
         """Disallow remote access if we're listening only on loopback addresses"""
+
+        # if blank, self.ip was configured to "*" meaning bind to all interfaces,
+        # see _valdate_ip
+        if self.ip == "":
+            return True
+
         try:
             addr = ipaddress.ip_address(self.ip)
         except ValueError:
@@ -1432,14 +1438,16 @@ class NotebookApp(JupyterApp):
                 url += '/'
         else:
             if self.ip in ('', '0.0.0.0'):
-                ip = "(%s or 127.0.0.1)" % socket.gethostname()
+                ip = "%s" % socket.gethostname()
             else:
                 ip = self.ip
             url = self._url(ip)
         if self.token:
             # Don't log full token if it came from config
             token = self.token if self._token_generated else '...'
-            url = url_concat(url, {'token': token})
+            url = (url_concat(url, {'token': token})
+                  + '\n or '
+                  + url_concat(self._url('127.0.0.1'), {'token': token}))
         return url
 
     @property
